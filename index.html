@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>本地个人工作台</title>
+<!-- 本工作台为本地运行方案：Python 本地服务 + 本地 JSON 存储 + Obsidian 直写，不使用云端同步 -->
+<style>
+:root{
+  --bg:#f6f7fb; --card:#ffffff; --line:#e8eaf2;
+  --tx:#1f2430; --tx2:#6b7280; --tx3:#9aa1b0;
+  --p1:#7c5cff; --p2:#9b7bff; --grad:linear-gradient(135deg,#7c5cff,#9b7bff);
+  --ok:#16a34a; --okbg:#e8f7ee; --bad:#dc2626; --badbg:#fdecec;
+  --warn:#d97706; --warnbg:#fef3e2; --pbg:#f1edff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif;background:var(--bg);color:var(--tx);font-size:16px;line-height:1.55;min-height:100vh}
+button{font-family:inherit;cursor:pointer;border:none;background:none;font-size:15px}
+input,select,textarea{font-family:inherit;font-size:16px;color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--p1);box-shadow:0 0 0 3px rgba(124,92,255,.12)}
+label{display:block;font-size:13px;color:var(--tx2);margin:12px 0 6px;font-weight:600}
+svg{flex-shrink:0}
+
+/* ===== 布局 ===== */
+#app{display:flex;min-height:100vh}
+#sidebar{width:220px;flex-shrink:0;background:var(--card);border-right:1px solid var(--line);padding:20px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
+.logo{display:flex;align-items:center;gap:10px;padding:4px 10px 18px}
+.logo .mark{width:36px;height:36px;border-radius:10px;background:var(--grad);display:flex;align-items:center;justify-content:center;color:#fff}
+.logo b{font-size:16px}
+.logo small{display:block;font-size:11px;color:var(--tx3);font-weight:400}
+.nav-btn{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:10px;color:var(--tx2);font-weight:600;text-align:left;width:100%;min-height:44px}
+.nav-btn:hover{background:var(--bg)}
+.nav-btn.on{background:var(--pbg);color:var(--p1)}
+.local-badge{margin-top:auto;background:var(--okbg);color:var(--ok);border-radius:10px;padding:10px 12px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px}
+main{flex:1;padding:26px 30px 60px;max-width:1060px;min-width:0}
+.view{display:none}
+.view.on{display:block;animation:fade .18s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+h1{font-size:22px;margin-bottom:4px}
+.sub{color:var(--tx2);font-size:14px;margin-bottom:18px}
+
+/* ===== 卡片/通用 ===== */
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.row{display:flex;align-items:center;gap:10px}
+.grow{flex:1;min-width:0}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 16px;border-radius:10px;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--tx)}
+.btn:hover{border-color:#d5d9e6}
+.btn-p{background:var(--grad);color:#fff;border:none}
+.btn-p:hover{opacity:.92}
+.btn-sm{min-height:36px;padding:0 12px;font-size:13px;border-radius:8px}
+.btn-danger{color:var(--bad);border-color:#f3c6c6}
+.btn-danger:hover{background:var(--badbg)}
+.btn-ok{color:var(--ok);border-color:#bfe6cd}
+.btn-ok:hover{background:var(--okbg)}
+.tag{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700}
+.tag-p0{background:var(--badbg);color:var(--bad)}
+.tag-p1{background:var(--warnbg);color:var(--warn)}
+.tag-p2{background:#eef1f6;color:var(--tx2)}
+.tag-ok{background:var(--okbg);color:var(--ok)}
+.tag-run{background:var(--pbg);color:var(--p1)}
+.tag-sample{background:#eef1f6;color:var(--tx3);font-weight:600}
+.tag-cat{background:#eef1f6;color:var(--tx2)}
+.muted{color:var(--tx3);font-size:12.5px}
+.ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ===== 今天要处理 ===== */
+.today-box{background:linear-gradient(135deg,#fff7f7,#fff);border:1px solid #f6d8d8;border-radius:14px;padding:16px;margin-bottom:18px}
+.today-box.amber{background:linear-gradient(135deg,#fffaf0,#fff);border-color:#f3dfb6}
+.today-title{font-weight:800;font-size:15px;display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.today-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px dashed #eee}
+.today-item .t{font-weight:600}
+.empty{color:var(--tx3);font-size:14px;padding:14px 0;text-align:center}
+
+/* ===== 列表条目 ===== */
+.item{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px}
+.item.done .t{text-decoration:line-through;color:var(--tx3)}
+.item .t{font-weight:600}
+.item .path{color:var(--tx3);font-size:12.5px;margin-top:3px;word-break:break-all}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+h2.sec{font-size:16px;margin:22px 0 12px;display:flex;align-items:center;gap:8px}
+.filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.filters button{min-height:38px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--tx2);font-weight:600;font-size:13.5px}
+.filters button.on{background:var(--pbg);color:var(--p1);border-color:#d8ccff}
+
+/* ===== 统计 ===== */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center}
+.stat b{font-size:26px;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.stat span{display:block;color:var(--tx2);font-size:12.5px;margin-top:2px}
+
+/* ===== 弹窗 ===== */
+.mask{position:fixed;inset:0;background:rgba(20,20,40,.45);display:none;align-items:flex-start;justify-content:center;padding:40px 16px;z-index:50;overflow:auto}
+.mask.on{display:flex}
+.modal{background:#fff;border-radius:16px;width:100%;max-width:520px;padding:20px}
+.modal h3{margin-bottom:6px;font-size:17px}
+.modal .foot{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+.picker-list{max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:10px}
+.picker-list button{display:flex;width:100%;text-align:left;padding:11px 14px;gap:8px;align-items:center;min-height:44px;border-bottom:1px solid #f1f2f7;color:var(--tx)}
+.picker-list button:hover{background:var(--pbg)}
+.crumb{font-size:12.5px;color:var(--tx2);word-break:break-all;margin-top:10px}
+
+/* ===== toast ===== */
+#toasts{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:99;display:flex;flex-direction:column;gap:8px;align-items:center;width:max-content;max-width:92vw}
+.toast{background:#262a38;color:#fff;border-radius:10px;padding:11px 18px;font-size:14px;box-shadow:0 6px 24px rgba(0,0,0,.18);animation:fade .2s ease;max-width:92vw;word-break:break-all}
+.toast.err{background:#b91c1c}
+.toast.ok{background:#15803d}
+
+/* ===== 移动端 ===== */
+@media (max-width:900px){
+  #app{flex-direction:column}
+  #sidebar{width:100%;height:auto;position:static;flex-direction:row;align-items:center;overflow-x:auto;padding:10px 12px;gap:6px;border-right:none;border-bottom:1px solid var(--line)}
+  .logo{padding:0 8px 0 0}
+  .logo small{display:none}
+  .nav-btn{width:auto;padding:9px 12px;white-space:nowrap}
+  .nav-btn span.txt{display:none}
+  .local-badge{margin:0 0 0 auto;padding:7px 10px;white-space:nowrap}
+  main{padding:18px 14px calc(70px + env(safe-area-inset-bottom))}
+  h1{font-size:19px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ============ 左侧导航 ============ -->
+  <aside id="sidebar">
+    <div class="logo">
+      <div class="mark"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
+      <div><b>本地工作台</b><small>仅本机运行 · 数据不出网</small></div>
+    </div>
+    <button class="nav-btn on" data-view="tasks"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span class="txt">任务清单</span></button>
+    <button class="nav-btn" data-view="projects"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg><span class="txt">项目工程</span></button>
+    <button class="nav-btn" data-view="resources"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><path d="M12 11v6M9 14h6"/></svg><span class="txt">数据资料</span></button>
+    <button class="nav-btn" data-view="notes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><span class="txt">知识笔记</span></button>
+    <button class="nav-btn" data-view="mine"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 14 0v1"/></svg><span class="txt">个人中心</span></button>
+    <div class="local-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>本机模式 · 数据存本地</div>
+  </aside>
+
+  <main>
+    <!-- ============ 1 任务清单 ============ -->
+    <section class="view on" id="view-tasks">
+      <h1>当前任务清单</h1>
+      <div class="sub">待办任务与进行中的项目，逾期自动置顶标红</div>
+      <div id="todayBox"></div>
+      <div class="row" style="margin-bottom:14px">
+        <button class="btn btn-p" id="btnAddTask"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>新建任务</button>
+        <div class="grow"></div>
+        <div class="filters" style="margin:0" id="taskFilters">
+          <button data-f="待办" class="on">待办</button>
+          <button data-f="进行中">进行中</button>
+          <button data-f="已完成">已完成</button>
+        </div>
+      </div>
+      <div id="taskList"></div>
+    </section>
+
+    <!-- ============ 2 项目工程 ============ -->
+    <section class="view" id="view-projects">
+      <h1>项目工程文件</h1>
+      <div class="sub">新建项目=在你指定路径创建项目文件夹；「打开」即进入该文件夹</div>
+      <div class="row" style="margin-bottom:14px">
+        <button class="btn btn-p" id="btnAddProj"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>新建项目</button>
+        <div class="grow"></div>
+        <div class="filters" style="margin:0" id="projFilters">
+          <button data-f="全部" class="on">全部</button>
+          <button data-f="进行中">进行中</button>
+          <button data-f="已完结">已完结</button>
+        </div>
+      </div>
+      <div id="projList"></div>
+    </section>
+
+    <!-- ============ 3 数据资料 ============ -->
+    <section class="view" id="view-resources">
+      <h1>数据资料管理</h1>
+      <div class="sub">新建文件夹归类存放测试数据、维修记录等</div>
+      <div class="row" style="margin-bottom:14px">
+        <button class="btn btn-p" id="btnAddRes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>新建资料文件夹</button>
+        <div class="grow"></div>
+        <div class="filters" style="margin:0" id="resFilters">
+          <button data-f="全部" class="on">全部</button>
+          <button data-f="测试数据">测试数据</button>
+          <button data-f="维修记录">维修记录</button>
+          <button data-f="其他">其他</button>
+        </div>
+      </div>
+      <div id="resList"></div>
+    </section>
+
+    <!-- ============ 4 知识笔记 ============ -->
+    <section class="view" id="view-notes">
+      <h1>知识笔记整理</h1>
+      <div class="sub">笔记以 Markdown 直写你的 Obsidian 库，Obsidian 内即时可见</div>
+      <div class="card" id="noteFormCard">
+        <div class="row"><b>写一条笔记</b><div class="grow"></div><span class="muted" id="vaultState"></span></div>
+        <label>标题</label>
+        <input id="noteTitle" placeholder="例如：SSD 掉盘问题排查记录">
+        <label>存放到库内文件夹</label>
+        <select id="noteFolder"></select>
+        <label>内容（Markdown）</label>
+        <textarea id="noteContent" rows="7" placeholder="支持 Markdown 语法…"></textarea>
+        <div class="row" style="margin-top:14px">
+          <button class="btn btn-p" id="btnSaveNote">保存到 Obsidian</button>
+          <button class="btn" id="btnOpenVault">打开 Obsidian 库</button>
+        </div>
+      </div>
+      <h2 class="sec">最近笔记（按修改时间）</h2>
+      <div id="noteList"></div>
+    </section>
+
+    <!-- ============ 5 个人中心 ============ -->
+    <section class="view" id="view-mine">
+      <h1>个人中心</h1>
+      <div class="sub">工作统计与设置</div>
+      <div class="stats" id="statBox"></div>
+
+      <h2 class="sec">Obsidian 库路径</h2>
+      <div class="card">
+        <div class="row">
+          <input id="cfgVault" class="grow" placeholder="例如 D:\Obsidian\MyVault">
+          <button class="btn" id="btnPickVault">浏览</button>
+          <button class="btn btn-p" id="btnSaveCfg">保存</button>
+        </div>
+        <div class="muted" id="cfgState" style="margin-top:8px"></div>
+      </div>
+
+      <h2 class="sec">数据与维护</h2>
+      <div class="card">
+        <div class="acts">
+          <button class="btn" id="btnExport">导出 JSON 备份</button>
+          <button class="btn btn-danger" id="btnClearSample">清空示例数据</button>
+          <button class="btn" id="btnReload">重新加载数据</button>
+        </div>
+        <div class="muted" style="margin-top:10px">业务数据保存在程序目录 data\ 文件夹（JSON），整体拷贝程序文件夹即可迁移到其他电脑。</div>
+      </div>
+
+      <h2 class="sec">使用帮助 / 迁移 / 版本管理</h2>
+      <div class="card">
+        <b style="font-size:14px">迁移到其他电脑</b>
+        <div class="muted" style="margin:6px 0 14px">把整个 LocalWorkbench 文件夹拷走 → 新电脑安装 Python 3.8+ → 双击 start.bat 即可，数据随 data\ 文件夹一起迁移。</div>
+        <b style="font-size:14px">推送到 GitHub</b>
+        <div class="muted" style="margin:6px 0 0">仓库已配好 .gitignore：data\、config.json、__pycache__ 等不会被提交；config.json 里的本地路径属于敏感配置，请勿手动加入版本库；首次配置可复制 config.example.json 与 .env.example（见 README.md 的详细说明）。</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============ 弹窗：任务 ============ -->
+<div class="mask" id="mTask">
+  <div class="modal">
+    <h3 id="mTaskTitle">新建任务</h3>
+    <label>任务标题 *</label><input id="fTaskTitle" placeholder="要做什么？">
+    <label>优先级</label>
+    <select id="fTaskPri"><option value="P0">P0 紧急</option><option value="P1" selected>P1 重要</option><option value="P2">P2 普通</option></select>
+    <label>截止日（选填）</label><input id="fTaskDue" type="date">
+    <label>状态</label>
+    <select id="fTaskStatus"><option>待办</option><option>进行中</option><option>已完成</option></select>
+    <label>关联项目（选填）</label><select id="fTaskProj"></select>
+    <div class="foot"><button class="btn" data-close>取消</button><button class="btn btn-p" id="btnSaveTask">保存</button></div>
+  </div>
+</div>
+
+<!-- ============ 弹窗：项目 ============ -->
+<div class="mask" id="mProj">
+  <div class="modal">
+    <h3 id="mProjTitle">新建项目</h3>
+    <label>项目名称 *</label><input id="fProjName" placeholder="例如：SSD 固件升级验证">
+    <label>存放路径（在此路径下创建同名文件夹）</label>
+    <div class="row"><input id="fProjPath" class="grow" placeholder="选择或输入路径"><button class="btn" id="btnPickProj">浏览</button></div>
+    <div class="muted" style="margin-top:6px">留空则只记录不建文件夹（适合先登记）</div>
+    <label>状态</label>
+    <select id="fProjStatus"><option>进行中</option><option>已完结</option></select>
+    <div class="foot"><button class="btn" data-close>取消</button><button class="btn btn-p" id="btnSaveProj">保存</button></div>
+  </div>
+</div>
+
+<!-- ============ 弹窗：资料 ============ -->
+<div class="mask" id="mRes">
+  <div class="modal">
+    <h3>新建资料文件夹</h3>
+    <label>文件夹名称 *</label><input id="fResName" placeholder="例如：2026-09 高低温循环测试">
+    <label>分类</label>
+    <select id="fResCat"><option>测试数据</option><option>维修记录</option><option>其他</option></select>
+    <label>存放路径 *</label>
+    <div class="row"><input id="fResPath" class="grow" placeholder="选择或输入路径"><button class="btn" id="btnPickRes">浏览</button></div>
+    <div class="foot"><button class="btn" data-close>取消</button><button class="btn btn-p" id="btnSaveRes">保存</button></div>
+  </div>
+</div>
+
+<!-- ============ 弹窗：路径选择器 ============ -->
+<div class="mask" id="mPick">
+  <div class="modal">
+    <h3>选择文件夹</h3>
+    <div class="row" style="margin-top:10px">
+      <button class="btn btn-sm" id="pickUp">上一级</button>
+      <button class="btn btn-sm" id="pickRoot">我的电脑</button>
+      <div class="grow"></div>
+      <button class="btn btn-p btn-sm" id="pickHere">选择当前目录</button>
+    </div>
+    <div class="crumb" id="pickCrumb"></div>
+    <div class="picker-list" id="pickList"></div>
+    <div class="foot"><button class="btn" data-close>取消</button></div>
+  </div>
+</div>
+
+<!-- ============ 弹窗：确认 ============ -->
+<div class="mask" id="mConfirm">
+  <div class="modal" style="max-width:400px">
+    <h3 id="cfTitle">确认操作</h3>
+    <div id="cfText" style="color:var(--tx2);margin-top:6px"></div>
+    <div class="foot"><button class="btn" data-close>取消</button><button class="btn btn-p" id="cfOk" style="background:var(--bad)">确认删除</button></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+"use strict";
+/* ================= 架构说明（铁律9）：数据层 loadAll → 计算层(纯函数) → 渲染层 render* 互不调用，统一由 refreshAll 调度 ================= */
+var S = { tasks:[], projects:[], resources:[], config:{}, vault:{folders:[],recent:[]}, today:"" };
+var taskFilter="待办", projFilter="全部", resFilter="全部", editingTaskId=null, editingProjId=null, pickTarget=null;
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+
+/* ---------------- API ---------------- */
+function api(path, body){
+  var opt = body ? {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)} : {};
+  return fetch(path, opt).then(function(r){ return r.json().then(function(j){ if(!j.ok) throw new Error(j.error||"请求失败"); return j.data; }); });
+}
+
+/* ---------------- toast / confirm ---------------- */
+function toast(msg, type){
+  var d=document.createElement("div"); d.className="toast"+(type==="err"?" err":type==="ok"?" ok":""); d.textContent=msg;
+  $("toasts").appendChild(d); setTimeout(function(){ d.remove(); }, 3200);
+}
+var confirmCb=null;
+function askConfirm(title, text, cb){ $("cfTitle").textContent=title; $("cfText").textContent=text; confirmCb=cb; $("mConfirm").classList.add("on"); }
+$("cfOk").addEventListener("click", function(){ $("mConfirm").classList.remove("on"); if(confirmCb) confirmCb(); });
+
+/* ---------------- 路径选择器 ---------------- */
+function pickPath(start, cb){
+  pickTarget=cb; $("mPick").classList.add("on"); browseTo(start||"");
+}
+function renderPick(d){
+  $("pickCrumb").textContent = d.drives ? "我的电脑（选择盘符）" : d.path;
+  $("pickCrumb").dataset.path = d.path||"";
+  $("pickCrumb").dataset.parent = d.parent||"";
+  var list=$("pickList"); list.innerHTML="";
+  (d.dirs||[]).forEach(function(n){
+    var b=document.createElement("button");
+    b.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg><span class="ellipsis">'+esc(n)+'</span>';
+    b.onclick=function(){ browseTo(d.drives ? n : (d.path.replace(/[\\\/]+$/,"")+"\\"+n)); };
+    list.appendChild(b);
+  });
+  if(!(d.dirs||[]).length) list.innerHTML='<div class="empty">此目录下没有子文件夹</div>';
+}
+function browseTo(p){
+  api("/api/browse", {path:p}).then(renderPick).catch(function(e){ toast(e.message,"err"); });
+}
+$("pickUp").addEventListener("click", function(){ var c=$("pickCrumb"); browseTo(c.dataset.parent||""); });
+$("pickRoot").addEventListener("click", function(){ browseTo(""); });
+$("pickHere").addEventListener("click", function(){
+  var p=$("pickCrumb").dataset.path||"";
+  $("mPick").classList.remove("on");
+  if(pickTarget) pickTarget(p); pickTarget=null;
+});
+function closeMasks(){ document.querySelectorAll(".mask").forEach(function(m){ m.classList.remove("on"); }); }
+document.querySelectorAll(".mask").forEach(function(m){
+  m.addEventListener("click", function(e){ if(e.target===m) m.classList.remove("on"); });
+  m.querySelectorAll("[data-close]").forEach(function(b){ b.addEventListener("click", function(){ m.classList.remove("on"); }); });
+});
+
+/* ---------------- 数据层 ---------------- */
+function loadAll(){
+  return api("/api/state").then(function(d){
+    S.tasks=d.tasks||[]; S.projects=d.projects||[]; S.resources=d.resources||[];
+    S.config=d.config||{}; S.vault=d.vault||{folders:[],recent:[]}; S.today=d.today||"";
+    return d;
+  });
+}
+function refreshAll(){
+  return loadAll().then(function(){ renderTasks(); renderProjects(); renderResources(); renderNotes(); renderMine(); })
+    .catch(function(e){ toast("数据加载失败："+e.message+"（请确认本地服务在运行）","err"); });
+}
+
+/* ---------------- 计算：今天要处理 ---------------- */
+function todayItems(){
+  var overdue=[], dueToday=[];
+  S.tasks.forEach(function(t){
+    if(t.status==="已完成") return;
+    if(t.due && t.due < S.today) overdue.push(t);
+    else if(t.due === S.today) dueToday.push(t);
+  });
+  return {overdue:overdue, dueToday:dueToday};
+}
+
+/* ---------------- 渲染：任务 ---------------- */
+var PRI={P0:["P0 紧急","tag-p0"],P1:["P1 重要","tag-p1"],P2:["P2 普通","tag-p2"]};
+function renderTasks(){
+  /* 今天要处理（置顶） */
+  var ti=todayItems(), h="";
+  var runProjs=S.projects.filter(function(p){ return p.status==="进行中"; });
+  if(ti.overdue.length || ti.dueToday.length){
+    h+='<div class="today-box'+(ti.overdue.length?"":" amber")+'">';
+    h+='<div class="today-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="'+(ti.overdue.length?"#dc2626":"#d97706")+'" stroke-width="2.2" stroke-linecap="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>今天要处理</div>';
+    ti.overdue.forEach(function(t){
+      h+='<div class="today-item"><span class="tag tag-p0">逾期</span><span class="t grow ellipsis">'+esc(t.title)+'</span><button class="btn btn-sm btn-ok" data-done="'+t.id+'">完成</button></div>';
+    });
+    ti.dueToday.forEach(function(t){
+      h+='<div class="today-item"><span class="tag tag-p1">今日</span><span class="t grow ellipsis">'+esc(t.title)+'</span><button class="btn btn-sm btn-ok" data-done="'+t.id+'">完成</button></div>';
+    });
+    h+='</div>';
+  } else {
+    h+='<div class="today-box amber"><div class="today-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>今天要处理</div><div class="empty">没有逾期或今日到期任务，保持得很好</div></div>';
+  }
+  if(runProjs.length){
+    h+='<div class="card" style="margin-bottom:18px"><div class="row" style="font-weight:700;font-size:14px;margin-bottom:8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7c5cff" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>正在进行中的项目（'+runProjs.length+'）</div><div class="acts">';
+    runProjs.forEach(function(p){
+      h+='<button class="btn btn-sm" data-openproj="'+p.id+'">'+esc(p.name)+' ↗</button>';
+    });
+    h+='</div></div>';
+  }
+  $("todayBox").innerHTML=h;
+
+  /* 任务列表 */
+  var list=S.tasks.filter(function(t){ return t.status===taskFilter; });
+  list.sort(function(a,b){
+    var w={P0:0,P1:1,P2:2};
+    if(a.status==="待办"&&b.status==="待办") return (w[a.priority]||9)-(w[b.priority]||9);
+    return 0;
+  });
+  var lh="";
+  if(!list.length) lh='<div class="empty card">暂无「'+esc(taskFilter)+'」任务</div>';
+  list.forEach(function(t){
+    var pr=PRI[t.priority]||PRI.P1;
+    var pName="";
+    if(t.projectId){ var p=S.projects.find(function(x){return x.id===t.projectId;}); if(p) pName=' <span class="tag tag-cat">'+esc(p.name)+'</span>'; }
+    lh+='<div class="item'+(t.status==="已完成"?" done":"")+'"><div class="row"><span class="tag '+pr[1]+'">'+pr[0]+'</span><span class="t grow">'+esc(t.title)+pName+'</span>'
+      +(t.due?'<span class="muted">截止 '+esc(t.due)+'</span>':"")
+      +(t.sample?'<span class="tag tag-sample">示例</span>':"")
+      +'</div><div class="row" style="margin-top:10px"><div class="acts">';
+    if(t.status!=="已完成") lh+='<button class="btn btn-sm btn-ok" data-done="'+t.id+'">完成</button>';
+    if(t.status==="待办") lh+='<button class="btn btn-sm" data-start="'+t.id+'">开始</button>';
+    lh+='<button class="btn btn-sm" data-edittask="'+t.id+'">编辑</button><button class="btn btn-sm btn-danger" data-deltask="'+t.id+'">删除</button>';
+    lh+='</div></div></div>';
+  });
+  $("taskList").innerHTML=lh;
+}
+
+/* ---------------- 渲染：项目 ---------------- */
+function renderProjects(){
+  var list=S.projects.filter(function(p){ return projFilter==="全部"||p.status===projFilter; });
+  var h="";
+  if(!list.length) h='<div class="empty card">暂无项目，点上方「新建项目」创建</div>';
+  list.forEach(function(p){
+    var run=p.status==="进行中";
+    h+='<div class="item"><div class="row"><span class="tag '+(run?"tag-run":"tag-ok")+'">'+p.status+'</span><span class="t grow">'+esc(p.name)+'</span>'
+      +(p.sample?'<span class="tag tag-sample">示例</span>':"")+'</div>'
+      +'<div class="path">'+(p.folderPath?("📁 "+esc(p.folderPath)):"未指定本地路径（仅登记）")+'</div>'
+      +'<div class="muted" style="margin-top:4px">创建于 '+esc(p.createdAt)+(p.completedAt?(' · 完结于 '+esc(p.completedAt)):"")+'</div>'
+      +'<div class="acts" style="margin-top:10px">'
+      +'<button class="btn btn-sm btn-p" data-open="'+p.id+'">打开文件夹</button>'
+      +(run?'<button class="btn btn-sm btn-ok" data-finish="'+p.id+'">标记完结</button>':'<button class="btn btn-sm" data-reopen="'+p.id+'">重新开启</button>')
+      +'<button class="btn btn-sm" data-delproj="'+p.id+'">删除记录</button>'
+      +'</div></div>';
+  });
+  $("projList").innerHTML=h;
+}
+
+/* ---------------- 渲染：资料 ---------------- */
+function renderResources(){
+  var list=S.resources.filter(function(r){ return resFilter==="全部"||r.category===resFilter; });
+  var h="";
+  if(!list.length) h='<div class="empty card">暂无资料文件夹，点上方「新建资料文件夹」创建</div>';
+  list.forEach(function(r){
+    h+='<div class="item"><div class="row"><span class="tag tag-cat">'+esc(r.category)+'</span><span class="t grow">'+esc(r.name)+'</span>'
+      +(r.sample?'<span class="tag tag-sample">示例</span>':"")+'</div>'
+      +'<div class="path">'+(r.folderPath?("📁 "+esc(r.folderPath)):"未指定路径")+'</div>'
+      +'<div class="muted" style="margin-top:4px">创建于 '+esc(r.createdAt)+'</div>'
+      +'<div class="acts" style="margin-top:10px">'
+      +'<button class="btn btn-sm btn-p" data-openres="'+r.id+'">打开文件夹</button>'
+      +'<button class="btn btn-sm btn-danger" data-delres="'+r.id+'">删除记录</button>'
+      +'</div></div>';
+  });
+  $("resList").innerHTML=h;
+}
+
+/* ---------------- 渲染：笔记 ---------------- */
+function renderNotes(){
+  var ok=S.config.vaultOk;
+  $("vaultState").textContent = ok ? ("已连接：" + S.config.obsidian_vault) : "未配置库路径";
+  /* 文件夹下拉 */
+  var sel=$("noteFolder"), cur=sel.value;
+  var folders=S.vault.folders&&S.vault.folders.length?S.vault.folders:["03 项目任务"];
+  sel.innerHTML=folders.map(function(f){ return '<option>'+esc(f)+'</option>'; }).join("");
+  if(folders.indexOf(cur)>=0) sel.value=cur;
+  /* 最近笔记 */
+  var h="";
+  var rec=S.vault.recent||[];
+  if(!ok) h='<div class="empty card">请先到「个人中心」配置 Obsidian 库路径</div>';
+  else if(!rec.length) h='<div class="empty card">库里还没有笔记，写第一条吧</div>';
+  rec.forEach(function(n){
+    h+='<div class="item"><div class="row"><span class="t grow ellipsis">'+esc(n.name)+'</span></div>'
+      +'<div class="muted" style="margin-top:3px">'+esc(n.folder)+' · '+esc(n.mtimeStr)+'</div></div>';
+  });
+  $("noteList").innerHTML=h;
+}
+
+/* ---------------- 渲染：个人中心 ---------------- */
+function renderMine(){
+  var done=S.tasks.filter(function(t){return t.status==="已完成";}).length;
+  var runP=S.projects.filter(function(p){return p.status==="进行中";}).length;
+  var finP=S.projects.filter(function(p){return p.status==="已完结";}).length;
+  var rate=S.tasks.length?Math.round(done/S.tasks.length*100):0;
+  $("statBox").innerHTML=
+    '<div class="stat"><b>'+S.tasks.length+'</b><span>任务总数</span></div>'+
+    '<div class="stat"><b>'+rate+'%</b><span>任务完成率</span></div>'+
+    '<div class="stat"><b>'+runP+'</b><span>进行中项目</span></div>'+
+    '<div class="stat"><b>'+finP+'</b><span>已完结项目</span></div>'+
+    '<div class="stat"><b>'+S.resources.length+'</b><span>资料文件夹</span></div>'+
+    '<div class="stat"><b>'+((S.vault.recent||[]).length)+'</b><span>最近笔记</span></div>';
+  $("cfgVault").value=S.config.obsidian_vault||"";
+  $("cfgState").textContent=S.config.vaultOk?"✓ 库路径有效":"✗ 路径无效或未配置，笔记功能暂不可用";
+}
+
+/* ---------------- 视图切换 ---------------- */
+document.querySelectorAll(".nav-btn").forEach(function(b){
+  b.addEventListener("click", function(){
+    document.querySelectorAll(".nav-btn").forEach(function(x){ x.classList.remove("on"); });
+    b.classList.add("on");
+    document.querySelectorAll(".view").forEach(function(v){ v.classList.remove("on"); });
+    $("view-"+b.dataset.view).classList.add("on");
+  });
+});
+
+/* ---------------- 筛选 ---------------- */
+$("taskFilters").addEventListener("click", function(e){
+  var b=e.target.closest("button"); if(!b) return;
+  taskFilter=b.dataset.f;
+  this.querySelectorAll("button").forEach(function(x){ x.classList.toggle("on",x===b); });
+  renderTasks(); /* 仅重渲染本视图，不触发其他渲染函数 */
+});
+$("projFilters").addEventListener("click", function(e){
+  var b=e.target.closest("button"); if(!b) return;
+  projFilter=b.dataset.f;
+  this.querySelectorAll("button").forEach(function(x){ x.classList.toggle("on",x===b); });
+  renderProjects();
+});
+$("resFilters").addEventListener("click", function(e){
+  var b=e.target.closest("button"); if(!b) return;
+  resFilter=b.dataset.f;
+  this.querySelectorAll("button").forEach(function(x){ x.classList.toggle("on",x===b); });
+  renderResources();
+});
+
+/* ---------------- 任务操作 ---------------- */
+function fillProjectOptions(){
+  var sel=$("fTaskProj");
+  sel.innerHTML='<option value="">不关联</option>'+S.projects.map(function(p){ return '<option value="'+p.id+'">'+esc(p.name)+'</option>'; }).join("");
+}
+$("btnAddTask").addEventListener("click", function(){
+  editingTaskId=null; $("mTaskTitle").textContent="新建任务";
+  $("fTaskTitle").value=""; $("fTaskDue").value=""; $("fTaskPri").value="P1"; $("fTaskStatus").value="待办";
+  fillProjectOptions(); $("mTask").classList.add("on"); $("fTaskTitle").focus();
+});
+$("btnSaveTask").addEventListener("click", function(){
+  var title=$("fTaskTitle").value.trim();
+  if(!title){ toast("请填写任务标题","err"); return; }
+  var body={ title:title, priority:$("fTaskPri").value, due:$("fTaskDue").value, status:$("fTaskStatus").value, projectId:$("fTaskProj").value };
+  var p;
+  if(editingTaskId){ p=api("/api/task", Object.assign({action:"update", id:editingTaskId}, body)); }
+  else{ p=api("/api/task", Object.assign({action:"add"}, body)); }
+  p.then(function(){ $("mTask").classList.remove("on"); toast("任务已保存","ok"); refreshAll(); })
+   .catch(function(e){ toast(e.message,"err"); });
+});
+$("taskList").addEventListener("click", function(e){
+  var b;
+  if(b=e.target.closest("[data-done]")) statusTo(b.dataset.done,"已完成");
+  else if(b=e.target.closest("[data-start]")) statusTo(b.dataset.start,"进行中");
+  else if(b=e.target.closest("[data-edittask]")){
+    var t=S.tasks.find(function(x){return x.id===b.dataset.edittask;}); if(!t) return;
+    editingTaskId=t.id; $("mTaskTitle").textContent="编辑任务";
+    $("fTaskTitle").value=t.title; $("fTaskDue").value=t.due||""; $("fTaskPri").value=t.priority||"P1"; $("fTaskStatus").value=t.status||"待办";
+    fillProjectOptions(); $("fTaskProj").value=t.projectId||"";
+    $("mTask").classList.add("on");
+  }
+  else if(b=e.target.closest("[data-deltask]")){
+    askConfirm("删除任务","删除后不可恢复（不会影响任何文件）。",function(){
+      api("/api/task",{action:"delete",id:b.dataset.deltask}).then(function(){ toast("已删除","ok"); refreshAll(); }).catch(function(er){ toast(er.message,"err"); });
+    });
+  }
+});
+$("todayBox").addEventListener("click", function(e){
+  var b=e.target.closest("[data-done]"); if(!b) return;
+  statusTo(b.dataset.done,"已完成");
+});
+function statusTo(id,status){
+  api("/api/task",{action:"update",id:id,status:status}).then(function(){ toast("状态已更新为「"+status+"」","ok"); refreshAll(); }).catch(function(e){ toast(e.message,"err"); });
+}
+
+/* ---------------- 项目操作 ---------------- */
+$("btnAddProj").addEventListener("click", function(){
+  editingProjId=null; $("mProjTitle").textContent="新建项目";
+  $("fProjName").value=""; $("fProjPath").value=""; $("fProjStatus").value="进行中";
+  $("mProj").classList.add("on"); $("fProjName").focus();
+});
+$("btnPickProj").addEventListener("click", function(){
+  pickPath($("fProjPath").value||"", function(p){ $("fProjPath").value=p; });
+});
+$("btnSaveProj").addEventListener("click", function(){
+  var name=$("fProjName").value.trim();
+  if(!name){ toast("请填写项目名称","err"); return; }
+  var body={ name:name, parentPath:$("fProjPath").value.trim(), status:$("fProjStatus").value };
+  var p = editingProjId
+    ? api("/api/project", Object.assign({action:"update", id:editingProjId}, body))
+    : api("/api/project", Object.assign({action:"add"}, body));
+  p.then(function(d){ $("mProj").classList.remove("on"); toast(d.message||"项目已保存","ok"); refreshAll(); })
+   .catch(function(e){ toast(e.message,"err"); });
+});
+$("projList").addEventListener("click", function(e){
+  var b;
+  if(b=e.target.closest("[data-open]")) openProj(b.dataset.open);
+  else if(b=e.target.closest("[data-openproj]")) openProj(b.dataset.openproj);
+  else if(b=e.target.closest("[data-finish]")) setProjStatus(b.dataset.finish,"已完结");
+  else if(b=e.target.closest("[data-reopen]")) setProjStatus(b.dataset.reopen,"进行中");
+  else if(b=e.target.closest("[data-delproj]")){
+    askConfirm("删除项目记录","只删除工作台里的记录，不会删除磁盘上的项目文件夹。",function(){
+      api("/api/project",{action:"delete",id:b.dataset.delproj}).then(function(){ toast("已删除记录","ok"); refreshAll(); }).catch(function(er){ toast(er.message,"err"); });
+    });
+  }
+});
+function openProj(id){
+  var p=S.projects.find(function(x){return x.id===id;});
+  if(!p) return;
+  if(!p.folderPath){ toast("该项目未指定本地路径（示例数据仅作演示）","err"); return; }
+  api("/api/open",{path:p.folderPath}).then(function(){ toast("已打开项目文件夹","ok"); }).catch(function(e){ toast(e.message,"err"); });
+}
+function setProjStatus(id,status){
+  api("/api/project",{action:"update_status",id:id,status:status}).then(function(){ toast(status==="已完结"?"项目已完结":"项目已重新开启","ok"); refreshAll(); }).catch(function(e){ toast(e.message,"err"); });
+}
+
+/* ---------------- 资料操作 ---------------- */
+$("btnAddRes").addEventListener("click", function(){
+  $("fResName").value=""; $("fResPath").value=""; $("fResCat").value="测试数据";
+  $("mRes").classList.add("on"); $("fResName").focus();
+});
+$("btnPickRes").addEventListener("click", function(){
+  pickPath($("fResPath").value||"", function(p){ $("fResPath").value=p; });
+});
+$("btnSaveRes").addEventListener("click", function(){
+  var name=$("fResName").value.trim();
+  if(!name){ toast("请填写文件夹名称","err"); return; }
+  api("/api/resource",{action:"add", name:name, category:$("fResCat").value, parentPath:$("fResPath").value.trim()})
+    .then(function(d){ $("mRes").classList.remove("on"); toast(d.message||"已创建","ok"); refreshAll(); })
+    .catch(function(e){ toast(e.message,"err"); });
+});
+$("resList").addEventListener("click", function(e){
+  var b;
+  if(b=e.target.closest("[data-openres]")){
+    var r=S.resources.find(function(x){return x.id===b.dataset.openres;});
+    if(!r||!r.folderPath){ toast("未指定路径（示例数据仅作演示）","err"); return; }
+    api("/api/open",{path:r.folderPath}).then(function(){ toast("已打开文件夹","ok"); }).catch(function(er){ toast(er.message,"err"); });
+  }
+  else if(b=e.target.closest("[data-delres]")){
+    askConfirm("删除资料记录","只删除工作台里的记录，不会删除磁盘上的文件夹。",function(){
+      api("/api/resource",{action:"delete",id:b.dataset.delres}).then(function(){ toast("已删除记录","ok"); refreshAll(); }).catch(function(er){ toast(er.message,"err"); });
+    });
+  }
+});
+
+/* ---------------- 笔记操作 ---------------- */
+$("btnSaveNote").addEventListener("click", function(){
+  var title=$("noteTitle").value.trim();
+  if(!title){ toast("请填写笔记标题","err"); return; }
+  api("/api/note",{action:"add", title:title, folder:$("noteFolder").value, content:$("noteContent").value})
+    .then(function(d){ $("noteTitle").value=""; $("noteContent").value=""; toast(d.message||"已保存","ok"); refreshAll(); })
+    .catch(function(e){ toast(e.message,"err"); });
+});
+$("btnOpenVault").addEventListener("click", function(){
+  if(!S.config.obsidian_vault){ toast("请先配置 Obsidian 库路径","err"); return; }
+  api("/api/open",{path:S.config.obsidian_vault}).then(function(){ toast("已打开 Obsidian 库","ok"); }).catch(function(e){ toast(e.message,"err"); });
+});
+
+/* ---------------- 个人中心操作 ---------------- */
+$("btnPickVault").addEventListener("click", function(){
+  pickPath($("cfgVault").value||"", function(p){ $("cfgVault").value=p; });
+});
+$("btnSaveCfg").addEventListener("click", function(){
+  api("/api/config",{action:"save", obsidian_vault:$("cfgVault").value.trim()})
+    .then(function(d){ toast(d.message||"已保存","ok"); refreshAll(); })
+    .catch(function(e){ toast(e.message,"err"); });
+});
+$("btnExport").addEventListener("click", function(){ window.location.href="/api/export"; toast("备份文件开始下载","ok"); });
+$("btnClearSample").addEventListener("click", function(){
+  askConfirm("清空示例数据","将删除所有标记为「示例」的任务、项目与资料记录，真实数据不受影响。",function(){
+    api("/api/clear-sample",{}).then(function(d){ toast(d.message||"已清空","ok"); refreshAll(); }).catch(function(e){ toast(e.message,"err"); });
+  });
+  document.getElementById("cfOk").textContent="确认清空";
+});
+$("btnReload").addEventListener("click", function(){ refreshAll().then(function(){ toast("已重新加载","ok"); }); });
+
+/* ================= 启动：加载数据 → 统一渲染 ================= */
+refreshAll();
+</script>
+</body>
+</html>

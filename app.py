@@ -215,7 +215,7 @@ def seed_if_empty():
 
 # ---------------- HTTP 服务 ----------------
 class Handler(BaseHTTPRequestHandler):
-    server_version = "LocalWorkbench/1.0"
+    server_version = "LocalWorkbench/1.0.01"
 
     # ---------- 响应工具 ----------
     def _json(self, obj, status=200):
@@ -398,6 +398,26 @@ class Handler(BaseHTTPRequestHandler):
             save_data("projects", projects)
             msg = "已创建项目文件夹: " + folder_path if created else "已记录项目（未创建文件夹）"
             return self._ok({"project": proj, "message": msg})
+        if action == "add_existing":
+            # 打开一个已有文件夹作为项目：不改动磁盘，仅登记
+            folder_path = abs_path(b.get("folderPath") or "")
+            if not folder_path or not os.path.isdir(folder_path):
+                return self._err("所选路径不是有效文件夹: " + folder_path)
+            # 去重：同一 folderPath 已登记则跳过
+            for p in projects:
+                if p.get("folderPath") and os.path.abspath(p["folderPath"]) == folder_path:
+                    return self._ok({"project": p, "message": "该项目已存在，未重复添加", "dup": True})
+            name = sanitize_name(b.get("name") or os.path.basename(folder_path)) or os.path.basename(folder_path)
+            proj = {
+                "id": uid(), "name": name,
+                "parentPath": os.path.dirname(folder_path), "folderPath": folder_path,
+                "status": b.get("status") or "进行中",
+                "createdAt": now_str(), "completedAt": "", "sample": False,
+                "folderCreated": False, "existing": True
+            }
+            projects.insert(0, proj)
+            save_data("projects", projects)
+            return self._ok({"project": proj, "message": "已将文件夹「%s」登记为项目（不改动磁盘）" % name})
         if action == "update_status":
             for p in projects:
                 if p["id"] == b.get("id"):

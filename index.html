@@ -157,9 +157,10 @@ h2.sec{font-size:16px;margin:22px 0 12px;display:flex;align-items:center;gap:8px
     <!-- ============ 2 项目工程 ============ -->
     <section class="view" id="view-projects">
       <h1>项目工程文件</h1>
-      <div class="sub">新建项目=在你指定路径创建项目文件夹；「打开」即进入该文件夹</div>
+      <div class="sub">新建项目=在你指定路径创建项目文件夹；也可把已有文件夹直接登记为项目；「打开」即进入该文件夹</div>
       <div class="row" style="margin-bottom:14px">
         <button class="btn btn-p" id="btnAddProj"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>新建项目</button>
+        <button class="btn" id="btnOpenAsProj"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M2 12h6l-2 2 2 2H2"/></svg>打开文件夹作为项目</button>
         <div class="grow"></div>
         <div class="filters" style="margin:0" id="projFilters">
           <button data-f="全部" class="on">全部</button>
@@ -236,6 +237,8 @@ h2.sec{font-size:16px;margin:22px 0 12px;display:flex;align-items:center;gap:8px
 
       <h2 class="sec">使用帮助 / 迁移 / 版本管理</h2>
       <div class="card">
+        <div class="row" style="margin-bottom:10px"><b style="font-size:14px">当前版本</b><div class="grow"></div><span class="tag tag-cat">V1.0.01</span></div>
+        <div class="muted" style="margin-bottom:12px">V1.0.01 新增：项目工程支持「打开文件夹作为项目」——把已有文件夹直接登记为项目，不改动磁盘文件。</div>
         <b style="font-size:14px">迁移到其他电脑</b>
         <div class="muted" style="margin:6px 0 14px">把整个 LocalWorkbench 文件夹拷走 → 新电脑安装 Python 3.8+ → 双击 start.bat 即可，数据随 data\ 文件夹一起迁移。</div>
         <b style="font-size:14px">推送到 GitHub</b>
@@ -456,6 +459,7 @@ function renderProjects(){
   list.forEach(function(p){
     var run=p.status==="进行中";
     h+='<div class="item"><div class="row"><span class="tag '+(run?"tag-run":"tag-ok")+'">'+p.status+'</span><span class="t grow">'+esc(p.name)+'</span>'
+      +(p.existing?'<span class="tag tag-cat">导入</span>':"")
       +(p.sample?'<span class="tag tag-sample">示例</span>':"")+'</div>'
       +'<div class="path">'+(p.folderPath?("📁 "+esc(p.folderPath)):"未指定本地路径（仅登记）")+'</div>'
       +'<div class="muted" style="margin-top:4px">创建于 '+esc(p.createdAt)+(p.completedAt?(' · 完结于 '+esc(p.completedAt)):"")+'</div>'
@@ -618,6 +622,15 @@ $("btnSaveProj").addEventListener("click", function(){
   p.then(function(d){ $("mProj").classList.remove("on"); toast(d.message||"项目已保存","ok"); refreshAll(); })
    .catch(function(e){ toast(e.message,"err"); });
 });
+$("btnOpenAsProj").addEventListener("click", function(){
+  pickPath("", function(p){ useExistingAsProject(p); });
+});
+function useExistingAsProject(p){
+  if(!p){ return; }
+  api("/api/project",{action:"add_existing", folderPath:p})
+    .then(function(d){ toast(d.message||"已登记为项目","ok"); refreshAll(); })
+    .catch(function(e){ toast(e.message,"err"); });
+}
 $("projList").addEventListener("click", function(e){
   var b;
   if(b=e.target.closest("[data-open]")) openProj(b.dataset.open);
